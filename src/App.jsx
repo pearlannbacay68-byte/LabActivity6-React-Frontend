@@ -164,6 +164,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadProducts = useCallback(async () => {
     setLoadingProducts(true);
@@ -273,6 +274,22 @@ function App() {
     setNotice('');
   }
 
+  const stockSummary = products.reduce(
+    (summary, product) => {
+      const quantity = Number(product.quantity) || 0;
+      summary.units += quantity;
+      summary.value += (Number(product.price) || 0) * quantity;
+      if (quantity <= 5) {
+        summary.lowStock += 1;
+      }
+      return summary;
+    },
+    { units: 0, value: 0, lowStock: 0 },
+  );
+  const filteredProducts = products.filter((product) =>
+    String(product.product_name || '').toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()),
+  );
+
   if (!authenticated) {
     return (
       <Login
@@ -313,6 +330,29 @@ function App() {
         {error && <p className="alert page-alert" role="alert">{error}</p>}
         {notice && <p className="success page-alert" role="status">{notice}</p>}
 
+        <section className="stock-summary" aria-label="Stock summary">
+          <div className="summary-stat">
+            <strong>{products.length}</strong>
+            <span>products in stockroom</span>
+          </div>
+          <div className="summary-stat">
+            <strong>{stockSummary.units.toLocaleString()}</strong>
+            <span>units on hand</span>
+          </div>
+          <div className="summary-stat">
+            <strong>{stockSummary.value.toLocaleString('en-PH', {
+              style: 'currency',
+              currency: 'PHP',
+              maximumFractionDigits: 2,
+            })}</strong>
+            <span>stock value</span>
+          </div>
+          <div className="summary-stat">
+            <strong>{stockSummary.lowStock}</strong>
+            <span>low on stock (≤ 5)</span>
+          </div>
+        </section>
+
         {showForm && (
           <ProductForm
             key={editingProduct?.id || 'new'}
@@ -330,15 +370,26 @@ function App() {
           <div className="catalog-heading">
             <div>
               <h2>All products</h2>
-              {!loadingProducts && <span className="item-count">{products.length} items</span>}
+              {!loadingProducts && <span className="item-count">{products.length} {products.length === 1 ? 'item' : 'items'}</span>}
             </div>
-            <button
-              className="button button-quiet button-small"
-              onClick={loadProducts}
-              disabled={loadingProducts}
-            >
-              Refresh
-            </button>
+            <div className="catalog-tools">
+              <label className="search-field">
+                <span className="visually-hidden">Search product name</span>
+                <input
+                  type="search"
+                  placeholder="Search products"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </label>
+              <button
+                className="button button-quiet button-small"
+                onClick={loadProducts}
+                disabled={loadingProducts}
+              >
+                {loadingProducts ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
           </div>
 
           {loadingProducts ? (
@@ -353,6 +404,11 @@ function App() {
               <p>Add your first product to get your catalog started.</p>
               <button className="button button-primary" onClick={beginAdd}>Add a product</button>
             </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="empty-state" role="status">
+              <h3>No matching products</h3>
+              <p>Try a different product name.</p>
+            </div>
           ) : (
             <div className="table-scroll">
               <table>
@@ -366,7 +422,7 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product) => (
+                  {filteredProducts.map((product) => (
                     <tr key={product.id}>
                       <td>
                         <span className="product-name">{product.product_name}</span>
